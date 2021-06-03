@@ -7,6 +7,7 @@ from rest_framework import status
 
 
 CREATE_USER_URL = reverse('user:create')
+TOKEN_URL = reverse('user:token')
 
 
 def create_user(**params):
@@ -40,6 +41,7 @@ class PublicUserApiTest(TestCase):
         payload = {
             'email': 'testing@bszu.dev',
             'password': 'testpass&3',
+            'name': 'Test',
         }
         create_user(**payload)
 
@@ -52,6 +54,7 @@ class PublicUserApiTest(TestCase):
         payload = {
             'email': 'testing@bszu.dev',
             'password': 'pw',
+            'name': 'Test',
         }
         res = self.client.post(CREATE_USER_URL, payload)
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
@@ -59,3 +62,61 @@ class PublicUserApiTest(TestCase):
             email=payload['email']
         ).exists()
         self.assertFalse(user_exists)
+
+    def test_create_token_for_user(self):
+        """ Test that a token is created for the user """
+        payload = {
+            'email': 'testing@bszu.dev',
+            'password': 'pwLONGasdfyx94fsd',
+        }
+        create_user(**payload)
+        res = self.client.post(TOKEN_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # there is a token
+        self.assertIn('token', res.data)
+
+    def test_create_token_invalid_credentials(self):
+        """ Test that with invalid credentials no token is created """
+
+        good_payload = {
+            'email': 'testing@bszu.dev',
+            'password': 'pwLONGasdfyx94fsd',
+        }
+        create_user(**good_payload)
+        bad_payload = good_payload
+        bad_payload['password'] = 'something_wrong!'
+        res = self.client.post(TOKEN_URL, bad_payload)
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        # there is no token
+        self.assertNotIn('token', res.data)
+
+    def test_create_token_no_user(self):
+        """ Test that token is not created if user does not exist """
+
+        payload = {
+            'email': 'testing@bszu.dev',
+            'password': 'pwLONGasdfyx94fsd',
+        }
+        # no create_user this time
+        res = self.client.post(TOKEN_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        # there is no token
+        self.assertNotIn('token', res.data)
+
+    def test_create_token_missing_password(self):
+        """ Test that email and password are required for token """
+        payload = {
+            'email': 'testing@bszu.dev',
+            'password': 'good_and_long_password1',
+        }
+        create_user(**payload)
+        partial_payload = payload
+        partial_payload['password'] = ''
+        res = self.client.post(TOKEN_URL, partial_payload)
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        # there is no token
+        self.assertNotIn('token', res.data)
