@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from core.models import Tag, Ingredient, Recipe
 from recipe import serializers
+from rest_framework.exceptions import ParseError
 
 
 class BaseRecipeAttrViewset(viewsets.GenericViewSet,
@@ -43,9 +44,35 @@ class RecipeViewset(viewsets.ModelViewSet):
     authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAuthenticated,)
 
+    def _params_to_ints(self, qs):
+        """ Convert a list of string ids to a list of integers """
+        return [int(str_id) for str_id in qs.split(',')]
+
     def get_queryset(self):
         """ Only return objects for the current user """
-        return self.queryset.filter(user=self.request.user).order_by('-id')
+        tags = self.request.query_params.get('tags')
+        ingredients = self.request.query_params.get('ingredients')
+        queryset = self.queryset.filter(user=self.request.user).order_by('-id')
+
+        if tags:
+            try:
+                tag_ids = self._params_to_ints(tags)
+            except ValueError:
+                raise ParseError(
+                    'Tags must be a comma separated list of ID integers'
+                )
+            queryset = queryset.filter(tags__id__in=tag_ids)
+
+        if ingredients:
+            try:
+                ingredient_ids = self._params_to_ints(ingredients)
+            except ValueError:
+                raise ParseError(
+                    'Ingredients must be a comma separated list of ID integers'
+                )
+            queryset = queryset.filter(ingredients__id__in=ingredient_ids)
+
+        return queryset.distinct()
 
     def get_serializer_class(self):
         """ Return appropriate serializer class """
