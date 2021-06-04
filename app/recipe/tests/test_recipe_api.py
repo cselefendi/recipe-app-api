@@ -5,6 +5,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from decimal import Decimal
+
 from core.models import Tag, Ingredient, Recipe
 from recipe.serializers import RecipeSerializer, RecipeDetailSerializer
 
@@ -32,7 +34,7 @@ def sample_recipe(user, **params):
     defaults = {
         'title': 'Sample recipe',
         'time_minutes': 10,
-        'price': 5.00
+        'price': Decimal('5.09')
     }
     defaults.update(params)
 
@@ -117,7 +119,7 @@ class PrivateRecipeApiTests(TestCase):
         payload = {
             'title': 'Chocolate cheescake',
             'time_minutes': 30,
-            'price': 5.00
+            'price': Decimal('5.01')
         }
 
         res = self.client.post(RECIPES_URL, payload)
@@ -135,7 +137,7 @@ class PrivateRecipeApiTests(TestCase):
         payload = {
             'title': 'Avocado lime cheescake',
             'time_minutes': 20,
-            'price': 10.00,
+            'price': Decimal('10.01'),
             'tags': [tag1.id, tag2.id, ],
         }
 
@@ -157,7 +159,7 @@ class PrivateRecipeApiTests(TestCase):
         payload = {
             'title': 'Thai prawn red curry',
             'time_minutes': 40,
-            'price': 21.01,
+            'price': Decimal('21.01'),
             'ingredients': [ingredient1.id, ingredient2.id, ingredient3.id, ],
         }
 
@@ -171,3 +173,47 @@ class PrivateRecipeApiTests(TestCase):
         self.assertIn(ingredient1, ingredients)
         self.assertIn(ingredient2, ingredients)
         self.assertIn(ingredient3, ingredients)
+
+    def test_partial_update_recipe(self):
+        """ Test updating a recipe with PATCH """
+        recipe = sample_recipe(user=self.user, title='ElsoCim')
+        recipe.tags.add(sample_tag(user=self.user, name='ElsoTag'))
+        new_tag = sample_tag(user=self.user, name='MasodikTag')
+
+        payload = {
+            'title': 'MasodikCim',
+            'tags': [new_tag.id, ]
+        }
+        url = detail_url(recipe.id)
+        # PATCH method
+        self.client.patch(url, payload)
+
+        recipe.refresh_from_db()
+
+        self.assertEqual(recipe.title, payload['title'])
+        tags = recipe.tags.all()
+        self.assertEqual(len(tags), 1)
+        self.assertIn(new_tag, tags)
+
+    def test_full_update_recipe(self):
+        """ Test updating a recipe with PUT """
+        recipe = sample_recipe(user=self.user)
+        recipe.tags.add(sample_tag(user=self.user, name='ElsoTag'))
+
+        payload = {
+            'title': 'Spaghetti crabonara',
+            'time_minutes': 25,
+            'price': Decimal('4.85'),
+        }
+        url = detail_url(recipe.id)
+        # PUT method
+        self.client.put(url, payload)
+
+        recipe.refresh_from_db()
+
+        self.assertEqual(recipe.title, payload['title'])
+        self.assertEqual(recipe.time_minutes, payload['time_minutes'])
+        self.assertEqual(recipe.price, payload['price'])
+
+        tags = recipe.tags.all()
+        self.assertEqual(len(tags), 0)
